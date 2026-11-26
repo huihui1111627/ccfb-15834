@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>南极科考站 · 多路径块设备阵列</title>
+  <style>
+    :root {
+      --bg: #07111f;
+      --panel: #0e1d31;
+      --panel-2: #122640;
+      --line: #21405f;
+      --text: #e8f3ff;
+      --muted: #89a7c2;
+      --cyan: #56d4ff;
+      --green: #39d98a;
+      --yellow: #ffd166;
+      --red: #ff6b6b;
+      --purple: #b794f6;
+      --blue: #6aa8ff;
+      --shadow: 0 12px 32px rgba(0,0,0,.28);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 12% -10%, rgba(86,212,255,.18), transparent 34rem),
+        radial-gradient(circle at 90% 0%, rgba(106,168,255,.13), transparent 30rem),
+        var(--bg);
+      color: var(--text);
+      font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    header {
+      padding: 22px 28px 16px;
+      border-bottom: 1px solid rgba(86,212,255,.16);
+      display: flex;
+      gap: 18px;
+      align-items: flex-end;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+    h1 { margin: 0 0 6px; font-size: 24px; letter-spacing: .04em; }
+    .subtitle { color: var(--muted); }
+    main { padding: 20px 28px 40px; max-width: 1680px; margin: 0 auto; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.012));
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px 15px;
+      box-shadow: var(--shadow);
+      min-height: 78px;
+    }
+    .card .k { color: var(--muted); font-size: 12px; margin-bottom: 7px; }
+    .card .v { font-size: 23px; font-weight: 750; font-variant-numeric: tabular-nums; }
+    .card .sub { color: var(--muted); font-size: 12px; margin-top: 3px; }
+    .grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(360px, .75fr); gap: 16px; align-items: start; }
+    .grid .wide { grid-column: 1 / -1; }
+    @media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } }
+    section.panel {
+      background: rgba(14,29,49,.92);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .panel-h {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      background: rgba(18,38,64,.72);
+    }
+    .panel-h h2 { margin: 0; font-size: 16px; }
+    .panel-h .hint { color: var(--muted); font-size: 12px; }
+    .panel-b { padding: 0; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 12px; border-bottom: 1px solid rgba(33,64,95,.72); text-align: left; vertical-align: middle; }
+    th { color: var(--muted); font-size: 12px; font-weight: 650; white-space: nowrap; background: rgba(7,17,31,.35); }
+    td { font-variant-numeric: tabular-nums; }
+    tr:last-child td { border-bottom: 0; }
+    tr:hover td { background: rgba(86,212,255,.045); }
+    code, .mono { font-family: var(--mono); font-size: 12px; }
+    .path-id { font-family: var(--mono); font-weight: 700; color: var(--cyan); }
+    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+    .badge.up { color: #06281a; background: var(--green); }
+    .badge.down { color: #310808; background: var(--red); }
+    .badge.checking { color: #332400; background: var(--yellow); }
+    .badge.active { color: #3a2400; background: var(--yellow); }
+    .badge.completed { color: #06281a; background: var(--green); }
+    .badge.failed { color: #fff; background: var(--red); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; box-shadow: 0 0 10px currentColor; }
+    .prio { font-weight: 800; color: var(--purple); }
+    .prio.low { color: var(--muted); }
+    .warn { color: var(--yellow); font-weight: 700; }
+    .danger { color: var(--red); font-weight: 700; }
+    .ok { color: var(--green); }
+    .muted { color: var(--muted); }
+    .right { text-align: right; }
+    .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    select, button, input {
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+      border-radius: 9px;
+      padding: 7px 10px;
+      font: inherit;
+    }
+    button { cursor: pointer; transition: transform .05s ease, border-color .15s ease, background .15s ease; }
+    button:hover { border-color: var(--cyan); background: #173656; }
+    button:active { transform: translateY(1px); }
+    button.danger:hover { border-color: var(--red); background: #4a1d27; }
+    button.good:hover { border-color: var(--green); background: #143d2d; }
+    button.mini { padding: 3px 7px; font-size: 12px; border-radius: 7px; }
+    a.button { display: inline-block; text-decoration: none; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); border-radius: 9px; padding: 7px 10px; font: inherit; cursor: pointer; }
+    a.button:hover { border-color: var(--cyan); background: #173656; }
+    .topology { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 10px; padding: 16px; align-items: stretch; overflow-x:auto; }
+    .node { border: 1px solid var(--line); background: rgba(18,38,64,.65); border-radius: 14px; padding: 12px; min-width: 150px; }
+    .node h3 { margin: 0 0 9px; font-size: 13px; color: var(--cyan); }
+    .node .item { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; border-bottom: 1px dashed rgba(137,167,194,.22); font-size: 12px; }
+    .node .item:last-child { border-bottom: 0; }
+    .lanes { display: flex; flex-direction: column; justify-content: center; gap: 8px; color: var(--muted); font-family: var(--mono); font-size: 11px; }
+    .alert-banner { display:none; margin: 0 28px 16px; padding: 12px 16px; border: 1px solid rgba(255,209,102,.5); background: rgba(255,209,102,.12); color: #ffe29a; border-radius: 12px; }
+    .alert-banner.show { display:block; }
+    .event-level { font-weight: 800; }
+    .event-level.error { color: var(--red); }
+    .event-level.warning, .event-level.notice { color: var(--yellow); }
+    .event-level.success { color: var(--green); }
+    .bar { height: 7px; background: rgba(255,255,255,.08); border-radius: 99px; overflow: hidden; min-width: 90px; }
+    .bar > i { display:block; height:100%; background: linear-gradient(90deg, var(--blue), var(--cyan)); border-radius: inherit; }
+    .space { display:flex; align-items:center; gap:8px; }
+    .space .bar { width: 90px; }
+    .footer-note { color: var(--muted); font-size: 12px; padding: 12px 16px; border-top: 1px solid var(--line); }
+    a.button { text-decoration: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>南极越冬站 · 多路径块设备层</h1>
+      <div class="subtitle">双网卡 / 双交换机 / 双控制器 / 四条路径 · 阵列、控制器与磁盘均为程序内模拟</div>
+    </div>
+    <div class="toolbar">
+      <label class="muted">优先级参照磁盘
+        <select id="diskSelect" title="选择一块盘以查看各路径对该盘的主/非主优先级"></select>
+      </label>
+      <label class="muted"><input id="autoRefresh" type="checkbox" checked /> 自动刷新</label>
+      <button onclick="resumeHost()">模拟主机恢复/重确认</button>
+      <a class="button" href="/api/hourly?format=csv" target="_blank">导出小时 CSV</a>
+      <a class="button" href="/api/hourly?format=json" target="_blank">导出 JSON</a>
+    </div>
+  </header>
+
+  <div id="spaceBanner" class="alert-banner"></div>
+
+  <main>
+    <div id="cards" class="cards"></div>
+
+    <div class="grid">
+      <div>
+        <section class="panel">
+          <div class="panel-h">
+            <h2>四条路径：状态、优先级、在途请求与延迟</h2>
+            <span class="hint" id="optimalHint"></span>
+          </div>
+          <div class="panel-b">
+            <table>
+              <thead><tr>
+                <th>路径</th><th>拓扑</th><th>状态</th><th>优先级</th><th class="right">在途</th>
+                <th class="right">EWMA</th><th class="right">平均</th><th class="right">最近</th>
+                <th class="right">完成 IO</th><th class="right">字节</th><th class="right">错误</th><th>操作</th>
+              </tr></thead>
+              <tbody id="pathRows"></tbody>
+            </table>
+          </div>
+          <div class="footer-note" id="pathReasonNote"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-h">
+            <h2>拓扑与交换机故障注入</h2>
+            <span class="hint">去年冬天的场景：点 “A 交换机断路” 会同时断掉两条路，另外两条继续承载 IO</span>
+          </div>
+          <div class="topology" id="topology"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-h">
+            <h2>磁盘、主控制器、在线扩容与空间预警</h2>
+            <span class="hint">容量变化由阵列通知驱动，不需要重新挂载</span>
+          </div>
+          <div class="panel-b">
+            <table>
+              <thead><tr>
+                <th>磁盘</th><th class="right">容量</th><th>主控制器</th><th>空间</th>
+                <th class="right">最佳单位</th><th>路径优先级</th><th>注入操作</th>
+              </tr></thead>
+              <tbody id="diskRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <div>
+        <section class="panel">
+          <div class="panel-h"><h2>切换窗口</h2><span class="hint">从故障/主控变更/恢复开始到收敛</span></div>
+          <div class="panel-b">
+            <table>
+              <thead><tr><th>时间</th><th>类型/原因</th><th class="right">挂起</th><th class="right">最长</th><th>状态</th><th></th></tr></thead>
+              <tbody id="switchRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-h"><h2>正在挂起的请求/分块</h2><span class="hint">切换期间不下放失败</span></div>
+          <div class="panel-b">
+            <table>
+              <thead><tr><th>请求</th><th>磁盘/IO</th><th>原因</th><th class="right">已等待</th></tr></thead>
+              <tbody id="activeSuspRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-h"><h2 id="recentSuspTitle">最近挂起记录</h2><span class="hint">含失败路径与恢复等待时长；可按切换窗口筛选</span></div>
+          <div class="panel-b">
+            <table>
+              <thead><tr><th>请求</th><th>切换</th><th>磁盘</th><th>原因</th><th class="right">时长</th><th>状态</th></tr></thead>
+              <tbody id="recentSuspRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <section class="panel wide">
+      <div class="panel-h">
+        <h2>最近故障、恢复与阵列通知事件</h2>
+        <span class="hint">每次状态变化都记录原因：探测超时、链路报错或阵列主动通知</span>
+      </div>
+      <div class="panel-b">
+        <table>
+          <thead><tr><th>时间</th><th>级别</th><th>对象</th><th>变化</th><th>原因</th><th>信息</th></tr></thead>
+          <tbody id="eventRows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel wide">
+      <div class="panel-h">
+        <h2>按小时统计：每条路径字节数与出错次数</h2>
+        <span class="hint">页面展示当前快照；完整数据可导出 CSV / JSON</span>
+      </div>
+      <div class="panel-b">
+        <table>
+          <thead><tr><th>小时</th><th>路径</th><th class="right">IO</th><th class="right">读字节</th><th class="right">写字节</th><th class="right">总字节</th><th class="right">路径错误</th><th class="right">繁忙重试</th><th class="right">介质错误</th></tr></thead>
+          <tbody id="hourRows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    let state = null;
+    let selectedDisk = localStorage.getItem('selectedDisk') || '';
+    let switchFilter = 0;
+
+    const reasonCN = {
+      link_error: '链路报错',
+      io_timeout: 'IO 超时',
+      probe_timeout: '探测超时',
+      probe_error: '探测错误',
+      probe_recovered: '探测恢复',
+      array_notification: '阵列主动通知',
+      host_resume: '主机休眠恢复后重确认',
+      startup_check: '启动检查',
+      no_healthy_path: '无健康路径，排队等待',
+      controller_switch: '主控制器切换'
+    };
+    const stateCN = { up: '正常', down: '断开', checking: '重新确认' };
+    const kindCN = {
+      path_failover: '路径故障切换',
+      controller_switch: '主控切换',
+      host_resume: '主机恢复',
+      startup_check: '启动确认'
+    };
+
+    function fmtBytes(n) {
+      if (!n) return '0 B';
+      const u = ['B','KiB','MiB','GiB','TiB'];
+      let i = 0, v = Number(n);
+      while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+      return `${v >= 100 || i === 0 ? v.toFixed(0) : v.toFixed(1)} ${u[i]}`;
+    }
+    function fmtNum(n) { return Number(n || 0).toLocaleString('zh-CN'); }
+    function fmtMS(n) { return n == null ? '-' : `${Number(n).toFixed(n < 10 ? 2 : 0)} ms`; }
+    function fmtTime(t) {
+      if (!t) return '-';
+      const d = new Date(t);
+      return d.toLocaleTimeString('zh-CN', { hour12: false }) + '.' + String(d.getMilliseconds()).padStart(3,'0');
+    }
+    function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+    function reason(r) { return reasonCN[r] || r || '-'; }
+    function selectedDiskObj() { return state?.disks?.find(d => d.id === selectedDisk) || state?.disks?.[0]; }
+    function priorityFor(pathID) {
+      const d = selectedDiskObj();
+      return d?.path_priorities?.[pathID] ?? 100;
+    }
+
+    async function postAction(url, body) {
+      try {
+        const resp = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body || {})});
+        if (!resp.ok) {
+          const e = await resp.json().catch(() => ({error: resp.statusText}));
+          alert(e.error || '操作失败');
+        }
+      } catch (e) { alert(String(e)); }
+      await tick();
+    }
+    function pathFault(id, fault) { return postAction('/api/control/path', {path_id:id, fault}); }
+    function notifyPath(id, state) { return postAction('/api/control/path-notify', {path_id:id, state, message:'阵列/控制器主动通知路径状态：'+state}); }
+    function switchFault(sw, fault) { return postAction('/api/control/switch', {switch:sw, fault}); }
+    function toggleOwner(d) { return postAction('/api/control/owner', {disk_id:d.id, controller:1-d.owner_controller, transition_ms:50}); }
+    function expandDisk(id) { return postAction('/api/control/expand', {disk_id:id, mib:1}); }
+    function spaceWarn(id) { return postAction('/api/control/space', {disk_id:id, used_percent:95}); }
+    function injectBusy(id) { return postAction('/api/control/array-error', {disk_id:id, busy:3}); }
+    function filterSwitch(id) { switchFilter = id; renderSwitchesAndSuspensions(); }
+    function clearSwitchFilter() { switchFilter = 0; renderSwitchesAndSuspensions(); }
+    function resumeHost() { return postAction('/api/host/resume', {}); }
+
+    function renderCards() {
+      const s = state.summary;
+      const alertCount = state.disks.filter(d => d.space_alert).length;
+      document.getElementById('cards').innerHTML = [
+        ['路径正常', `${s.paths_up}/4`, `确认中 ${s.paths_checking} · 断开 ${s.paths_down}`, s.paths_down ? 'warn' : 'ok'],
+        ['在途请求', s.active_requests, `已完成 ${fmtNum(s.total_completed)}`, ''],
+        ['累计传输', fmtBytes(s.total_bytes), `读 ${fmtBytes(state.paths.reduce((a,p)=>a+p.read_bytes,0))} / 写 ${fmtBytes(state.paths.reduce((a,p)=>a+p.write_bytes,0))}`, ''],
+        ['路径错误', fmtNum(s.total_path_errors), `繁忙重试 ${fmtNum(s.total_busy_retries)} · 介质 ${fmtNum(s.total_media_errors)}`, s.total_path_errors ? 'danger' : 'ok'],
+        ['累计挂起', fmtNum(s.total_suspensions), `当前 ${s.active_suspensions} · 最长 ${s.max_suspension_wait_ms} ms`, s.active_suspensions ? 'warn' : ''],
+        ['切换窗口', fmtNum(s.switch_count), `活动 ${s.active_switches}`, ''],
+        ['磁盘数量', state.disks.length, `空间预警 ${alertCount}`, alertCount ? 'warn' : 'ok'],
+        ['请求序号', fmtNum(s.request_counter), `最佳单位 ${fmtBytes(state.optimal_io_size)}`, '']
+      ].map(([k,v,sub,cls]) => `<div class="card"><div class="k">${k}</div><div class="v ${cls}">${v}</div><div class="sub">${sub}</div></div>`).join('');
+
+      const banner = document.getElementById('spaceBanner');
+      const alerts = state.disks.filter(d => d.space_alert);
+      if (alerts.length) {
+        banner.classList.add('show');
+        banner.innerHTML = '⚠️ 阵列空间预警（已上报上层）：' + alerts.map(d => `${esc(d.id)} ${d.used_percent}%`).join('，');
+      } else banner.classList.remove('show');
+      document.getElementById('optimalHint').textContent = `大请求按 ${fmtBytes(state.optimal_io_size)} 最佳传输单位对齐拆分并并行发送`;
+    }
+
+    function renderDiskSelect() {
+      const sel = document.getElementById('diskSelect');
+      if (sel.options.length !== state.disks.length) {
+        sel.innerHTML = state.disks.map(d => `<option value="${d.id}">${d.id}</option>`).join('');
+        sel.onchange = () => { selectedDisk = sel.value; localStorage.setItem('selectedDisk', selectedDisk); renderPaths(); };
+      }
+      for (const d of state.disks) {
+        const opt = sel.querySelector(`option[value="${CSS.escape(d.id)}"]`);
+        if (opt) opt.textContent = `${d.id} · 主ctl${d.owner_controller}`;
+      }
+      const current = selectedDiskObj()?.id;
+      if (!selectedDisk || !state.disks.some(d => d.id === selectedDisk)) selectedDisk = current;
+      sel.value = current;
+    }
+
+    function renderPaths() {
+      const d = selectedDiskObj();
+      document.getElementById('pathRows').innerHTML = state.paths.map(p => {
+        const prio = priorityFor(p.id);
+        const ownerForSelected = d && p.controller === d.owner_controller;
+        const errTitle = esc(p.last_error || p.last_detail || '');
+        return `<tr>
+          <td><div class="path-id">${esc(p.id)}</div><div class="muted">${esc(p.nic)} · ${esc(p.switch)}</div></td>
+          <td><span class="mono">ctl${p.controller}</span><div class="muted">${ownerForSelected ? '该盘主控路径' : '非主控/较慢'}</div></td>
+          <td><span class="badge ${p.state}"><span class="dot"></span>${stateCN[p.state] || p.state}</span>
+              <div class="muted" title="${errTitle}">${reason(p.last_reason)}</div></td>
+          <td><span class="prio ${prio < 100 ? 'low' : ''}">${prio}</span><div class="muted">${prio === 100 ? 'active/optimized' : 'active/non-opt'}</div></td>
+          <td class="right"><b>${p.active}</b></td>
+          <td class="right">${fmtMS(p.ewma_latency_ms)}</td>
+          <td class="right muted">${fmtMS(p.average_latency_ms)}</td>
+          <td class="right muted">${fmtMS(p.last_latency_ms)}</td>
+          <td class="right">${fmtNum(p.completed)}</td>
+          <td class="right">${fmtBytes(p.bytes_total)}<div class="muted">本时 ${p.current_hour ? fmtBytes(p.current_hour.bytes_total) : '-'}</div></td>
+          <td class="right"><span class="${p.path_errors ? 'danger' : ''}">${fmtNum(p.path_errors)}</span><div class="muted">忙${p.busy_retries} / 盘${p.media_errors}</div></td>
+          <td><div class="toolbar">
+            <button class="mini danger" onclick="pathFault('${p.id}','link_down')">断路</button>
+            <button class="mini" onclick="pathFault('${p.id}','timeout')">黑洞</button>
+            <button class="mini" title="模拟阵列主动上报路径状态" onclick="notifyPath('${p.id}','down')">阵列通知</button>
+            <button class="mini good" onclick="pathFault('${p.id}','up')">恢复</button>
+          </div></td>
+        </tr>`;
+      }).join('');
+      const changed = [...state.paths].sort((a,b)=> new Date(b.last_state_change)-new Date(a.last_state_change))[0];
+      if (changed) document.getElementById('pathReasonNote').innerHTML =
+        `最近路径状态变化：<b>${esc(changed.id)}</b> → ${stateCN[changed.state]||changed.state}，原因：<b>${reason(changed.last_reason)}</b>，${esc(changed.last_detail || '')}（${fmtTime(changed.last_state_change)}）`;
+    }
+
+    function renderTopology() {
+      const node = (title, items) => `<div class="node"><h3>${title}</h3>${items}</div>`;
+      const nicNode = n => node(n, state.paths.filter(p=>p.nic===n).map(p=>`<div class="item"><span>${p.id.split('-').slice(0,2).join('-')}</span><span class="badge ${p.state}">${stateCN[p.state]}</span></div>`).join(''));
+      const swNode = s => node(s, state.paths.filter(p=>p.switch===s).map(p=>`<div class="item"><span>${p.id.split('-')[0]}→ctl${p.controller}</span><span class="${p.state==='up'?'ok':p.state==='down'?'danger':'warn'}">●</span></div>`).join('') +
+        `<div style="margin-top:8px;display:flex;gap:5px;flex-wrap:wrap"><button class="mini danger" onclick="switchFault('${s}','link_down')">交换机冻坏</button><button class="mini good" onclick="switchFault('${s}','up')">恢复</button></div>`);
+      const ctlNode = c => node(`控制器 ctl${c}`, state.paths.filter(p=>p.controller===c).map(p=>`<div class="item"><span>${p.switch}</span><span class="badge ${p.state}">${stateCN[p.state]}</span></div>`).join(''));
+      document.getElementById('topology').innerHTML =
+        `<div>${nicNode('nic-0')}<div style="height:10px"></div>${nicNode('nic-1')}</div>` +
+        `<div class="lanes"><span>p0/p1</span><span>p2/p3</span></div>` +
+        `<div>${swNode('switch-A')}<div style="height:10px"></div>${swNode('switch-B')}</div>` +
+        `<div class="lanes"><span>双控路径</span><span>冗余切换</span></div>` +
+        `<div>${ctlNode(0)}<div style="height:10px"></div>${ctlNode(1)}</div>`;
+    }
+
+    function renderDisks() {
+      document.getElementById('diskRows').innerHTML = state.disks.slice(0, 18).map(d => {
+        const pcts = Object.entries(d.path_priorities).map(([pid,pri]) => `<span class="mono ${pri===100?'':'muted'}">${pid.split('-')[0]}:${pri}</span>`).join(' ');
+        const barColor = d.space_alert ? 'var(--red)' : d.used_percent > 80 ? 'var(--yellow)' : 'var(--cyan)';
+        return `<tr>
+          <td class="path-id">${esc(d.id)}${d.switching ? ' <span class="badge active">切换中</span>' : ''}</td>
+          <td class="right"><b>${fmtBytes(d.size)}</b></td>
+          <td><span class="badge ${d.owner_stable ? 'up' : 'checking'}">ctl${d.owner_controller}</span></td>
+          <td><div class="space"><div class="bar"><i style="width:${d.used_percent}%;background:${barColor}"></i></div><span class="${d.space_alert?'danger':''}">${d.used_percent}%</span></div>${d.space_alert?'<div class="warn">空间预警已上报</div>':''}</td>
+          <td class="right muted">${fmtBytes(d.optimal_io_size)}</td>
+          <td><div class="mono" style="display:flex;gap:8px;flex-wrap:wrap">${pcts}</div></td>
+          <td><div class="toolbar">
+            <button class="mini" onclick='toggleOwner(${JSON.stringify(d)})'>切主</button>
+            <button class="mini good" onclick="expandDisk('${d.id}')">扩容 +1MiB</button>
+            <button class="mini" onclick="spaceWarn('${d.id}')">空间预警</button>
+            <button class="mini" onclick="injectBusy('${d.id}')">注入繁忙</button>
+          </div></td>
+        </tr>`;
+      }).join('');
+    }
+
+    function renderSwitchesAndSuspensions() {
+      document.getElementById('switchRows').innerHTML = state.switches.slice(0, 14).map(x => `<tr>
+        <td class="mono muted">${fmtTime(x.started_at)}</td>
+        <td><b>${kindCN[x.kind] || x.kind}</b><div class="muted">${reason(x.reason)}${x.path_id ? ' · '+esc(x.path_id) : ''}${x.disk_id ? ' · '+esc(x.disk_id) : ''}</div></td>
+        <td class="right">${x.suspended_count}<div class="muted">活动 ${x.active_suspensions}</div></td>
+        <td class="right">${x.max_wait_ms} ms</td>
+        <td><span class="badge ${x.status}">${x.status === 'active' ? '进行中' : '完成'} ${x.duration_ms ? x.duration_ms+'ms' : ''}</span></td>
+        <td><button class="mini" onclick="filterSwitch(${x.id})">挂起请求</button></td>
+      </tr>`).join('') || '<tr><td colspan="6" class="muted">暂无切换</td></tr>';
+
+      const activeNow = Date.now();
+      document.getElementById('activeSuspRows').innerHTML = state.active_suspensions.slice(0, 20).map(x => `<tr>
+        <td>#${x.request_id}-${x.chunk_index}</td>
+        <td>${esc(x.disk_id)}<div class="muted">${x.op} ${fmtBytes(x.length)} @${x.offset}</div></td>
+        <td>${reason(x.reason)}${x.failed_path ? `<div class="muted">${esc(x.failed_path)}</div>`:''}</td>
+        <td class="right warn">${Math.max(0, activeNow - new Date(x.started_at))} ms</td>
+      </tr>`).join('') || '<tr><td colspan="4" class="muted">当前没有挂起请求</td></tr>';
+
+      let recent = state.recent_suspensions;
+      const title = document.getElementById('recentSuspTitle');
+      if (switchFilter) {
+        recent = recent.filter(x => x.switch_id === switchFilter);
+        title.innerHTML = `切换 #${switchFilter} 的挂起记录 <button class="mini" onclick="clearSwitchFilter()">清除筛选</button>`;
+      } else {
+        title.textContent = '最近挂起记录';
+      }
+      document.getElementById('recentSuspRows').innerHTML = recent.slice(0, 60).map(x => `<tr>
+        <td>#${x.request_id}-${x.chunk_index}</td>
+        <td class="mono"><a href="javascript:filterSwitch(${x.switch_id})">#${x.switch_id}</a></td>
+        <td>${esc(x.disk_id)}<div class="muted">${x.op} ${fmtBytes(x.length)}</div></td>
+        <td>${reason(x.reason)}</td>
+        <td class="right">${x.duration_ms} ms</td>
+        <td><span class="badge ${x.status==='resumed'?'completed':'failed'}">${x.status==='resumed'?'已恢复':'失败'}</span></td>
+      </tr>`).join('') || `<tr><td colspan="6" class="muted">${switchFilter ? '该切换窗口没有保留下来的已完成挂起明细（可能为 0 或已超出最近缓存）' : '暂无记录'}</td></tr>`;
+    }
+
+    function renderEvents() {
+      document.getElementById('eventRows').innerHTML = state.events.slice(0, 45).map(e => `<tr>
+        <td class="mono muted">${fmtTime(e.at)}</td>
+        <td class="event-level ${e.level}">${({error:'错误',warning:'警告',notice:'注意',success:'恢复',info:'信息'})[e.level] || e.level}</td>
+        <td>${esc(e.path_id || e.disk_id || '-')}</td>
+        <td>${e.from_state ? `${stateCN[e.from_state]||e.from_state} → <b>${stateCN[e.to_state]||e.to_state}</b>` : (e.kind || '-')}</td>
+        <td><span class="badge checking">${reason(e.reason)}</span></td>
+        <td class="muted">${esc(e.message)}</td>
+      </tr>`).join('');
+    }
+
+    function renderHourly() {
+      const rows = [...state.hourly].sort((a,b) => b.hour.localeCompare(a.hour) || a.path_id.localeCompare(b.path_id)).slice(0, 40);
+      document.getElementById('hourRows').innerHTML = rows.map(h => `<tr>
+        <td class="mono">${h.hour}</td><td class="mono">${h.path_id}</td><td class="right">${fmtNum(h.ios)}</td>
+        <td class="right">${fmtBytes(h.read_bytes)}</td><td class="right">${fmtBytes(h.write_bytes)}</td><td class="right"><b>${fmtBytes(h.bytes_total)}</b></td>
+        <td class="right ${h.path_errors?'danger':''}">${h.path_errors}</td><td class="right">${h.busy_retries}</td><td class="right">${h.media_errors}</td>
+      </tr>`).join('') || '<tr><td colspan="9" class="muted">暂无统计</td></tr>';
+    }
+
+    function render() {
+      if (!state) return;
+      renderCards();
+      renderDiskSelect();
+      renderPaths();
+      renderTopology();
+      renderDisks();
+      renderSwitchesAndSuspensions();
+      renderEvents();
+      renderHourly();
+    }
+
+    async function tick() {
+      try {
+        const resp = await fetch('/api/state', {cache:'no-store'});
+        state = await resp.json();
+        render();
+      } catch (e) {
+        document.querySelector('.subtitle').textContent = '状态接口连接失败：' + e;
+      }
+    }
+    document.getElementById('autoRefresh').onchange = e => {
+      if (e.target.checked) tick();
+    };
+    setInterval(() => { if (document.getElementById('autoRefresh').checked) tick(); }, 1000);
+    tick();
+  </script>
+</body>
+</html>
